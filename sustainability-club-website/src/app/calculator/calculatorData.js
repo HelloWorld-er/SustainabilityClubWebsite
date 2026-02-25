@@ -255,12 +255,23 @@ export const ANALYSIS_CHARTS = {
     type: 'pie',
     title: 'Emission Ratios',
     accentColor: 'bg-primary-green',
-    getData: (data, activeSelections) => {
+    getData: (data, activeSelections, apiResults) => {
+      if (apiResults?.current?.categories) {
+        return activeSelections.map(id => {
+          const config = CATEGORIES[id];
+          const value = apiResults.current.categories[id]?.dailyFootprint || 0;
+          return {
+            name: config.name,
+            value: parseFloat(value.toFixed(2))
+          };
+        }).filter(item => item.value > 0);
+      }
+
       return activeSelections.map(id => {
         const config = CATEGORIES[id];
         const value = data[id];
         const scores = getCategoryScore(id, value);
-        
+
         return {
           name: config.name,
           value: parseFloat((scores.dailyFootprint || 0).toFixed(2))
@@ -274,9 +285,9 @@ export const ANALYSIS_CHARTS = {
     title: 'Global Comparison',
     accentColor: 'bg-primary-skyblue',
     footer: 'Values in kg CO2e per day',
-    getData: (data, activeSelections) => {
-      const scores = calculateScore(data, activeSelections);
-      const totalScore = scores.dailyFootprint || "0.00";
+    getData: (data, activeSelections, apiResults) => {
+      const totalScore = apiResults?.current?.totals?.dailyFootprint
+        ?? (calculateScore(data, activeSelections).dailyFootprint || "0.00");
       return [
         { name: 'You', value: parseFloat(totalScore), fill: '#0EA5E9' },
         { name: 'Local', value: COMPARISON_DATA.local, fill: '#10B981' },
@@ -292,12 +303,26 @@ export const SIMULATION_CHARTS = {
     id: 'categoryComparison',
     type: 'line',
     title: 'Category Comparison',
-    getData: (data, simulationData, activeSelections) => {
+    getData: (data, simulationData, activeSelections, apiResults) => {
+      if (apiResults?.current?.categories && apiResults?.simulated?.categories) {
+        return activeSelections.map(id => {
+          const config = CATEGORIES[id];
+          const original = apiResults.current.categories[id]?.dailyFootprint || 0;
+          const simulated = apiResults.simulated.categories[id]?.dailyFootprint || 0;
+
+          return {
+            category: config.name,
+            original: parseFloat(original.toFixed(2)),
+            simulated: parseFloat(simulated.toFixed(2))
+          };
+        });
+      }
+
       return activeSelections.map(id => {
         const config = CATEGORIES[id];
         const originalValue = data[id];
         const simulatedValue = simulationData[id];
-        
+
         const originalScores = getCategoryScore(id, originalValue);
         const simulatedScores = getCategoryScore(id, simulatedValue);
 
@@ -313,7 +338,19 @@ export const SIMULATION_CHARTS = {
     id: 'totalTrend',
     type: 'line',
     title: 'Total Impact Trend',
-    getData: (data, simulationData, activeSelections) => {
+    getData: (data, simulationData, activeSelections, apiResults) => {
+      if (apiResults?.current?.totals && apiResults?.simulated?.totals) {
+        const current = parseFloat(apiResults.current.totals.dailyFootprint || 0);
+        const simulated = parseFloat(apiResults.simulated.totals.dailyFootprint || 0);
+        const target = current * 0.5;
+
+        return [
+          { name: 'Original State', original: current, simulated: current },
+          { name: 'Simulated State', original: current, simulated: simulated },
+          { name: '50% Goal', original: target, simulated: target },
+        ];
+      }
+
       const current = parseFloat(calculateScore(data, activeSelections).dailyFootprint || 0);
       const simulated = parseFloat(calculateScore(simulationData, activeSelections).dailyFootprint || 0);
       const target = current * 0.5;

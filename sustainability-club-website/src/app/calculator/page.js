@@ -103,8 +103,17 @@ export default function Calculator() {
   const [data, setData] = useState(INITIAL_DATA);
 
   const [simulationData, setSimulationData] = useState(INITIAL_DATA);
+  const [apiResults, setApiResults] = useState(null);
+  const [apiMeta, setApiMeta] = useState({
+    updatedAt: null,
+    statement: null,
+    sources: null,
+    isLoading: false,
+    error: null
+  });
 
   const [expandedCategories, setExpandedCategories] = useState({});
+  const apiDebounceRef = useRef(null);
 
   const toggleCategoryExpansion = (id) => {
     setExpandedCategories(prev => ({ ...prev, [id]: !prev[id] }));
@@ -114,22 +123,22 @@ export default function Calculator() {
   const totalScore = useMemo(() => calculateScore(data, activeSelections), [data, activeSelections]);
   const simTotalScore = useMemo(() => calculateScore(simulationData, activeSelections), [simulationData, activeSelections]);
 
-  const dailyFootprint = totalScore.dailyFootprint || "0.00";
-  const simDailyFootprint = simTotalScore.dailyFootprint || "0.00";
+  const dailyFootprint = apiResults?.current?.totals?.dailyFootprint || totalScore.dailyFootprint || "0.00";
+  const simDailyFootprint = apiResults?.simulated?.totals?.dailyFootprint || simTotalScore.dailyFootprint || "0.00";
 
   const analysisChartsData = useMemo(() => {
     return Object.values(ANALYSIS_CHARTS).reduce((acc, chart) => {
-      acc[chart.id] = chart.getData(data, activeSelections);
+      acc[chart.id] = chart.getData(data, activeSelections, apiResults);
       return acc;
     }, {});
-  }, [data, activeSelections]);
+  }, [data, activeSelections, apiResults]);
 
   const simulationChartsData = useMemo(() => {
     return Object.values(SIMULATION_CHARTS).reduce((acc, chart) => {
-      acc[chart.id] = chart.getData(data, simulationData, activeSelections);
+      acc[chart.id] = chart.getData(data, simulationData, activeSelections, apiResults);
       return acc;
     }, {});
-  }, [data, simulationData, activeSelections]);
+  }, [data, simulationData, activeSelections, apiResults]);
 
   const addCategory = (id) => {
     if (!activeSelections.includes(id)) {
@@ -189,6 +198,64 @@ export default function Calculator() {
     handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isAnalysisVisible]);
+
+  useEffect(() => {
+    if (activeSelections.length === 0) {
+      setApiResults(null);
+      setApiMeta(prev => ({ ...prev, error: null, isLoading: false }));
+      return;
+    }
+
+    if (apiDebounceRef.current) {
+      clearTimeout(apiDebounceRef.current);
+    }
+
+    const controller = new AbortController();
+
+    apiDebounceRef.current = setTimeout(async () => {
+      setApiMeta(prev => ({ ...prev, isLoading: true, error: null }));
+      try {
+        const res = await fetch('/api/footprint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data,
+            simulationData,
+            selections: activeSelections
+          }),
+          signal: controller.signal
+        });
+
+        if (!res.ok) {
+          throw new Error('Unable to calculate emissions right now.');
+        }
+
+        const payload = await res.json();
+        setApiResults(payload);
+        setApiMeta({
+          updatedAt: payload?.meta?.updatedAt || null,
+          statement: payload?.meta?.statement || null,
+          sources: payload?.meta?.sources || null,
+          isLoading: false,
+          error: null
+        });
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+        setApiMeta(prev => ({
+          ...prev,
+          isLoading: false,
+          error: err?.message || 'Unable to calculate emissions right now.'
+        }));
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      if (apiDebounceRef.current) {
+        clearTimeout(apiDebounceRef.current);
+      }
+    };
+  }, [data, simulationData, activeSelections]);
 
   return (
     <div className="max-w-350 mx-auto py-16 px-4 relative">
@@ -438,13 +505,15 @@ export default function Calculator() {
                   <div key={type.id}>
                     <h2 className="text-sm font-black uppercase tracking-widest mb-2 opacity-80">{type.name}</h2>
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-7xl font-black">{totalScore[type.id] || "0.00"}</span>
+                      <span className="text-7xl font-black">{type.id === 'dailyFootprint' ? dailyFootprint : (totalScore[type.id] || "0.00")}</span>
                       <span className="text-xl font-bold opacity-80">{type.unit}</span>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="text-blue-100 mt-4 mb-8 font-medium">Updated in real-time</p>
+              <p className="text-blue-100 mt-4 mb-8 font-medium">
+                {apiMeta.isLoading ? 'Updating with latest emission factors...' : 'Updated in real-time'}
+              </p>
 
                   <div className="space-y-4">
                     <div className="bg-white/20 backdrop-blur-md p-6 rounded-2xl border border-white/10">
@@ -483,10 +552,20 @@ export default function Calculator() {
             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm text-primary-green shrink-0">
               <Info className="w-5 h-5" />
             </div>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Calculations are based on global average emission factors. For more specific school-related data, check our 
-              <Link href="/posts" className="text-primary-skyblue font-bold ml-1 hover:underline">Research section</Link>.
-            </p>
+            <div className="text-xs text-gray-500 leading-relaxed">
+              <p>
+                {apiMeta.statement || 'Calculations are based on global average emission factors.'}
+              </p>
+              {apiMeta.updatedAt && (
+                <p className="mt-2">
+                  Last updated: <span className="font-semibold">{apiMeta.updatedAt}</span>
+                </p>
+              )}
+              <p className="mt-2">
+                For more specific school-related data, check our
+                <Link href="/posts" className="text-primary-skyblue font-bold ml-1 hover:underline">Research section</Link>.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -698,20 +777,20 @@ export default function Calculator() {
                             <div key={`sim-res-${type.id}`}>
                               <h2 className="text-sm font-black uppercase tracking-widest mb-2 opacity-80">Simulated {type.name}</h2>
                               <div className="flex items-baseline gap-2 mb-2">
-                                <span className="text-7xl font-black">{simTotalScore[type.id] || "0.00"}</span>
+                                <span className="text-7xl font-black">{type.id === 'dailyFootprint' ? simDailyFootprint : (simTotalScore[type.id] || "0.00")}</span>
                                 <span className="text-xl font-bold opacity-80">{type.unit}</span>
                               </div>
                               
                               <div className="flex items-center gap-3">
                                 <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-1 ${
-                                  parseFloat(simTotalScore[type.id] || 0) <= parseFloat(totalScore[type.id] || 0) 
+                                  parseFloat(type.id === 'dailyFootprint' ? simDailyFootprint : (simTotalScore[type.id] || 0)) <= parseFloat(type.id === 'dailyFootprint' ? dailyFootprint : (totalScore[type.id] || 0)) 
                                     ? 'bg-green-400/30 text-green-50' 
                                     : 'bg-red-400/30 text-red-50'
                                 }`}>
-                                  {parseFloat(simTotalScore[type.id] || 0) <= parseFloat(totalScore[type.id] || 0) ? (
-                                    <>Reduction: {(parseFloat(totalScore[type.id] || 0) - parseFloat(simTotalScore[type.id] || 0)).toFixed(2)} {type.unit.split(' ')[0]}</>
+                                  {parseFloat(type.id === 'dailyFootprint' ? simDailyFootprint : (simTotalScore[type.id] || 0)) <= parseFloat(type.id === 'dailyFootprint' ? dailyFootprint : (totalScore[type.id] || 0)) ? (
+                                    <>Reduction: {(parseFloat(type.id === 'dailyFootprint' ? dailyFootprint : (totalScore[type.id] || 0)) - parseFloat(type.id === 'dailyFootprint' ? simDailyFootprint : (simTotalScore[type.id] || 0))).toFixed(2)} {type.unit.split(' ')[0]}</>
                                   ) : (
-                                    <>Increase: {(parseFloat(simTotalScore[type.id] || 0) - parseFloat(totalScore[type.id] || 0)).toFixed(2)} {type.unit.split(' ')[0]}</>
+                                    <>Increase: {(parseFloat(type.id === 'dailyFootprint' ? simDailyFootprint : (simTotalScore[type.id] || 0)) - parseFloat(type.id === 'dailyFootprint' ? dailyFootprint : (totalScore[type.id] || 0))).toFixed(2)} {type.unit.split(' ')[0]}</>
                                   )}
                                 </div>
                               </div>

@@ -1,0 +1,42 @@
+{
+  "updatedAt": "2026-02-24",
+  "statement": "Emission factors are periodically updated using U.S. EPA eGRID electricity datasets and IPCC fuel carbon accounting methods to reflect the most current energy system data available.",
+  "factors": {
+    "transport": {
+      "car_kg_co2e_per_km": 0.2,
+      "public_transport_kg_co2e_per_km": 0.05
+    },
+    "electricity": {
+      "kg_co2e_per_kwh": 0.39
+    },
+    "waste": {
+      "general_kg_co2e_per_kg": 1.5,
+      "recycling_kg_co2e_per_kg": 0.2
+    },
+    "water": {
+      "kg_co2e_per_liter": 0.001
+    },
+    "flights": {
+      "short_haul_kg_co2e_per_hour": 150,
+      "long_haul_kg_co2e_per_hour": 250
+    },
+    "heating": {
+      "gas_kg_co2e_per_m3": 1.9
+    }
+  },
+  "sources": [
+    {
+      "id": "epa-egrid",
+      "title": "U.S. EPA eGRID",
+      "url": "https://www.epa.gov/egrid",
+      "notes": "Electricity emission factor (U.S. average)."
+    },
+    {
+      "id": "ipcc-2006",
+      "title": "IPCC 2006 Guidelines for National Greenhouse Gas Inventories",
+      "url": "https://www.ipcc-nggip.iges.or.jp/public/2006gl/",
+      "notes": "Fuel carbon accounting methods for natural gas."
+    }
+  ]
+}
+
