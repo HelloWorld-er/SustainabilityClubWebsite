@@ -1,0 +1,24 @@
+{
+  "epa_egrid_us_average": {
+    "enabled": false,
+    "type": "csv",
+    "url": "https://data.epa.gov/efservice/egrid/",
+    "targetPath": "factors.electricity.kg_co2e_per_kwh",
+    "valueColumn": "Co2_Emission_Factor",
+    "rowFilter": {
+      "Year": "2022",
+      "Source": "US"
+    },
+    "multiplier": 0.001,
+    "notes": "Configure with a direct eGRID CSV endpoint that returns a US average CO2e per kWh value. This placeholder will not update until a valid URL is provided."
+  },
+  "ipcc_natural_gas_factor": {
+    "enabled": false,
+    "type": "json",
+    "url": "https://example.com/ipcc-natural-gas.json",
+    "targetPath": "factors.heating.gas_kg_co2e_per_m3",
+    "valuePath": "factors.naturalGas.kg_co2e_per_m3",
+    "notes": "Provide a JSON endpoint derived from IPCC fuel carbon accounting tables."
+  }
+}
+
