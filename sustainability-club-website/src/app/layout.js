@@ -22,6 +22,11 @@ export const metadata = {
     template: `%s | ${SITE_NAME}`
   },
   description: "Student-led sustainability education, climate research, and a practical carbon footprint calculator.",
+  icons: {
+    icon: [{ url: "/icon", type: "image/png" }],
+    shortcut: "/icon",
+    apple: "/icon",
+  },
   keywords: [
     "sustainability club",
     "carbon footprint calculator",
